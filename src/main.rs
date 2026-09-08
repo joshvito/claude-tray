@@ -119,7 +119,7 @@ impl Ui {
 
         // Elapsed times move every tick. Retargeting the text costs nothing, where rebuilding
         // the menu allocates a GDI bitmap per row that muda never frees.
-        if self.menu.is_some() && self.roster == roster {
+        if self.menu.is_some() && self.roster == roster && self.texts.len() == rows.len() {
             for (index, row) in rows.iter().enumerate() {
                 if self.texts[index] != row.text {
                     self.items[index].set_text(&row.text);
@@ -129,12 +129,19 @@ impl Ui {
             return;
         }
 
-        self.rebuild(&header, rows);
-        self.roster = roster;
+        if self.rebuild(&header, rows) {
+            self.roster = roster;
+        } else {
+            // The menu on screen is still the old one. Forget the roster so the next tick tries
+            // again rather than retargeting rows that were never appended.
+            self.roster.clear();
+        }
     }
 
     /// Build a fresh menu, hand it to the tray, then reclaim what the outgoing one held.
-    fn rebuild(&mut self, header: &str, rows: Vec<Row>) {
+    ///
+    /// False means the tray still shows the previous menu.
+    fn rebuild(&mut self, header: &str, rows: Vec<Row>) -> bool {
         let menu = Menu::new();
         let mut items = Vec::with_capacity(rows.len());
         let mut texts = Vec::with_capacity(rows.len());
@@ -142,27 +149,27 @@ impl Ui {
         if menu.append(&MenuItem::new(header, false, None)).is_err()
             || menu.append(&PredefinedMenuItem::separator()).is_err()
         {
-            return;
+            return false;
         }
 
         for row in rows {
             let swatch = self.swatch(row.color);
             let item = IconMenuItem::new(&row.text, true, swatch, None);
             if menu.append(&item).is_err() {
-                return;
+                return false;
             }
             items.push(item);
             texts.push(row.text);
         }
 
         if !items.is_empty() && menu.append(&PredefinedMenuItem::separator()).is_err() {
-            return;
+            return false;
         }
         if menu
             .append(&MenuItem::with_id(EXIT_ID, "Exit", true, None))
             .is_err()
         {
-            return;
+            return false;
         }
 
         self.tray.set_menu(Some(Box::new(menu.clone())));
@@ -175,6 +182,7 @@ impl Ui {
         self.menu = Some(menu);
         self.items = items;
         self.texts = texts;
+        true
     }
 }
 
