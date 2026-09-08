@@ -1,7 +1,7 @@
 # claude-tray
 
 <img src="docs/hero.png" width="900"
-  alt="claude-tray: a red tray icon badged 2, beside the session menu listing one waiting, one busy and two idle Claude Code sessions">
+  alt="claude-tray: a red tray icon badged 4, beside the session menu listing one waiting, one busy and two idle Claude Code sessions">
 
 Tray-resident status for every running Claude Code session on this machine. Tells you at a glance
 — without focusing the terminal — how many sessions are running and whether any of them is blocked
@@ -10,9 +10,12 @@ waiting on you.
 Display only. It never writes to Claude Code's files and never sends it anything.
 
 ```
-tray icon:  ( 2 )   red disc   -> 2 sessions waiting on you
-            ( 1 )   blue disc  -> 1 session working, none blocked
-            ( 4 )   gray ring  -> 4 sessions, all idle
+tray icon:  the number is how many sessions are running,
+            the color is what they are doing
+
+            ( 4 )   red disc   -> 4 sessions, at least one waiting on you
+            ( 3 )   blue disc  -> 3 sessions, one or more working, none blocked
+            ( 2 )   gray ring  -> 2 sessions, all idle
 ```
 
 Click the icon for the session list. Each row carries a color chip of its own, so a session stays
@@ -20,12 +23,15 @@ recognizable as its status changes and the list re-sorts around it — the chip 
 the glyph and label say what it is doing. A session keeps its color across a resume, and two
 sessions running in the same repo still get different colors.
 
+A name longer than 40 characters is cut with an ellipsis. Claude Code derives one from the first
+prompt when it has nothing shorter to go on, and those stretch the menu off the screen.
+
 Rows are sorted attention-first (waiting → busy → idle), then oldest-first within a status, so the
 session that has been stuck longest is always at the top — as below, where a permission prompt pulls
 `api-gateway-f6` to the top of the list.
 
 <img src="docs/demo.gif" width="900"
-  alt="The tray icon changing from a gray ring to blue to red as sessions start working and then block on a permission prompt, while the menu re-sorts the blocked session to the top">
+  alt="The tray icon holding a count of 4 while its color goes from a gray ring to blue to red as sessions start working and then block on a permission prompt, and the menu re-sorts the blocked session to the top">
 
 ## Where the data comes from
 
@@ -35,21 +41,28 @@ Claude Code maintains a live registry at `%USERPROFILE%\.claude\sessions\<pid>.j
 ```json
 {"pid":10900,"sessionId":"45f2d40d-…","cwd":"C:\\Users\\you\\repos\\api-gateway",
  "name":"api-gateway-f6","kind":"interactive","status":"waiting",
- "waitingFor":"permission prompt","startedAt":1786632182305,"statusUpdatedAt":1786633564687}
+ "waitingFor":"permission prompt","procStart":"134332896411764291",
+ "startedAt":1786632182305,"statusUpdatedAt":1786633564687}
 ```
 
 - `status` is one of `busy`, `shell`, `idle`, `waiting`.
 - `waitingFor` (only while `waiting`) is one of `permission prompt`, `input needed`, `dialog open`,
   `sandbox request`, `worker request`.
 - `kind` is one of `interactive`, `bg`, `daemon`, `daemon-worker`; daemon kinds are not listed.
+- `procStart` is the process creation time in FILETIME ticks, as a decimal string.
 
 The registry is polled once per second. A session whose JSON is caught mid-write falls back to the
 last good copy for that tick, so rows don't flicker.
 
 Claude Code deletes a session's file on a clean exit, but a killed session leaves the file behind,
-so each pid is verified to be a running `claude.exe` before it is listed. That check also guards
-against pid reuse. If a pid exists but its image path can't be read, the session is still shown —
-a stale row beats a missing one.
+so each pid is matched against its recorded `procStart` before it is listed. That pins a row to one
+process at 100 ns resolution, which rules out a recycled pid.
+
+It has to be the creation time rather than the image name. An in-place update renames the running
+binary to `claude.exe.old.<timestamp>`, and Windows reports a process's image by its *current* name,
+so a name check silently loses every session that started before the last update. Files written
+before Claude Code recorded `procStart` still fall back to the image name, and a pid whose image
+path can't be read is shown either way — a stale row beats a missing one.
 
 ## Build and run
 

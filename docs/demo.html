@@ -109,22 +109,22 @@ function elapsed(sec) {
 // Row = [status, name, LABEL, age-seconds, waitingFor?]. Row order is what the tray
 // would show: attention-first (waiting -> busy -> idle), oldest-first within a status.
 var BEATS = [
-  { n: 5, k: 'idle', c: 4, rows: [
+  { n: 5, k: 'idle', rows: [
     ['i','billing-service-b4','IDLE',600], ['i','api-gateway-f6','IDLE',480],
     ['i','web-app-16','IDLE',180], ['i','index-perf-test','IDLE',120]] },
-  { n: 3, k: 'busy', c: 1, rows: [
+  { n: 3, k: 'busy', rows: [
     ['b','web-app-16','BUSY',1], ['i','billing-service-b4','IDLE',605],
     ['i','api-gateway-f6','IDLE',485], ['i','index-perf-test','IDLE',125]] },
-  { n: 3, k: 'busy', c: 2, rows: [
+  { n: 3, k: 'busy', rows: [
     ['b','web-app-16','BUSY',8], ['b','api-gateway-f6','BUSY',1],
     ['i','billing-service-b4','IDLE',610], ['i','index-perf-test','IDLE',130]] },
-  { n: 6, k: 'waiting', c: 1, rows: [
+  { n: 6, k: 'waiting', rows: [
     ['w','api-gateway-f6','WAITING',1,'permission prompt'], ['b','web-app-16','BUSY',14],
     ['i','billing-service-b4','IDLE',616], ['i','index-perf-test','IDLE',136]] },
-  { n: 3, k: 'busy', c: 2, rows: [
+  { n: 3, k: 'busy', rows: [
     ['b','web-app-16','BUSY',22], ['b','api-gateway-f6','BUSY',9],
     ['i','billing-service-b4','IDLE',624], ['i','index-perf-test','IDLE',144]] },
-  { n: 3, k: 'idle', c: 4, rows: [
+  { n: 3, k: 'idle', rows: [
     ['i','billing-service-b4','IDLE',630], ['i','index-perf-test','IDLE',150],
     ['i','api-gateway-f6','IDLE',3], ['i','web-app-16','IDLE',1]] }
 ];
@@ -132,7 +132,7 @@ var BEATS = [
 var FRAMES = [];
 BEATS.forEach(function (b) {
   for (var i = 0; i < b.n; i++) {
-    FRAMES.push({ k: b.k, c: b.c, rows: b.rows.map(function (r) {
+    FRAMES.push({ k: b.k, rows: b.rows.map(function (r) {
       return [r[0], r[1], r[2], r[3] + i, r[4]];
     }) });
   }
@@ -162,7 +162,8 @@ var CHIP = {
 };
 
 function draw(f) {
-  document.getElementById('icon').innerHTML = iconSvg(f.k, f.c);
+  // src/session.rs::icon_state - the color ranks urgency, the badge counts sessions.
+  document.getElementById('icon').innerHTML = iconSvg(f.k, f.rows.length);
   document.getElementById('tip').textContent = tooltip(f.rows);
   var rows = f.rows.map(function (r) {
     var g = r[0], name = r[1], label = r[2], age = r[3], why = r[4];

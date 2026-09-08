@@ -5,6 +5,12 @@ use crate::session::{Session, Status};
 /// Windows caps `NOTIFYICONDATA.szTip` at 128 wide chars.
 const TOOLTIP_MAX: usize = 120;
 
+/// Longest session name a row will show.
+///
+/// Claude Code names a session after its first prompt when it has nothing shorter to go on, and
+/// those run long enough to stretch the menu past the edge of the screen.
+const NAME_MAX: usize = 40;
+
 /// Compact duration: `45s`, `1m12s`, `4m`, `2h3m`.
 pub fn elapsed(ms: u64) -> String {
     let secs = ms / 1000;
@@ -30,6 +36,16 @@ pub fn elapsed(ms: u64) -> String {
     }
 }
 
+/// Shorten a name to `NAME_MAX` chars, marking the cut. Counts chars, not bytes: session names
+/// carry non-ASCII.
+fn clamp_name(name: &str) -> String {
+    if name.chars().count() <= NAME_MAX {
+        return name.to_string();
+    }
+    let kept: String = name.chars().take(NAME_MAX - 1).collect();
+    format!("{}\u{2026}", kept.trim_end())
+}
+
 /// Windows menus read a lone `&` as a mnemonic marker.
 fn escape_mnemonics(text: &str) -> String {
     text.replace('&', "&&")
@@ -41,7 +57,7 @@ pub fn row(session: &Session, now_ms: u64) -> String {
     let mut text = format!(
         "{} {} \u{2014} {} {}",
         session.status.glyph(),
-        session.name,
+        clamp_name(&session.name),
         session.status.label(),
         elapsed(age)
     );
@@ -111,6 +127,36 @@ mod tests {
         assert_eq!(elapsed(900_000), "15m");
         assert_eq!(elapsed(7_380_000), "2h3m");
         assert_eq!(elapsed(7_200_000), "2h");
+    }
+
+    #[test]
+    fn short_names_are_left_alone() {
+        assert_eq!(clamp_name("repos-80"), "repos-80");
+        let exact = "x".repeat(NAME_MAX);
+        assert_eq!(clamp_name(&exact), exact);
+    }
+
+    /// A name taken from a first prompt, which is what makes the menu unusably wide.
+    #[test]
+    fn long_names_are_clamped() {
+        let long = "Token sub property usage \u{2442} suggest a new npm package for se.extensions, \
+                    that would repl";
+        let clamped = clamp_name(long);
+        assert_eq!(clamped.chars().count(), NAME_MAX);
+        assert!(clamped.ends_with('\u{2026}'), "no cut marker: {clamped}");
+
+        // The status and elapsed time are what the row is for; they must survive the cut.
+        let session = Session {
+            pid: 1,
+            key: "k".to_string(),
+            name: long.to_string(),
+            status: Status::Idle,
+            waiting_for: None,
+            since: 0,
+        };
+        let text = row(&session, 60_000);
+        assert!(text.ends_with("IDLE 1m"), "row was truncated: {text}");
+        assert!(text.chars().count() < long.chars().count());
     }
 
     #[test]

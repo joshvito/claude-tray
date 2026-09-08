@@ -58,7 +58,8 @@
 
   /* ---- right, below the menu: what the three icon states mean ---- */
   .stack { display: flex; flex-direction: column; align-items: flex-start; }
-  .legend { display: flex; gap: 40px; margin: 34px 0 0 8px; }
+  .legend-note { margin: 30px 0 0 8px; font-size: 14px; color: #667085; }
+  .legend { display: flex; gap: 40px; margin: 18px 0 0 8px; }
   .state { display: flex; align-items: center; gap: 13px; }
   .state svg { width: 46px; height: 46px; }
   .state b { font-size: 16px; font-weight: 600; letter-spacing: .09em; color: #C4CBD6; }
@@ -66,16 +67,16 @@
 </style>
 
 <div class="brand">
-  <!-- 32-unit viewBox == src/icon.rs SIZE. Waiting state: filled #E5482F disc, r=15, white "2". -->
+  <!-- 32-unit viewBox == src/icon.rs SIZE. Waiting state: filled #E5482F disc, r=15, white "4" -
+       the badge is the session count, so it matches the menu beside it. -->
   <svg class="icon" viewBox="0 0 32 32" shape-rendering="crispEdges">
     <circle cx="16" cy="16" r="15" fill="#E5482F" shape-rendering="geometricPrecision"/>
-    <!-- FONT[2] = 111 / 001 / 111 / 100 / 111, scale 3, origin (11, 8) -->
+    <!-- FONT[4] = 101 / 101 / 111 / 001 / 001, scale 3, origin (11, 8), horizontal runs merged -->
     <g fill="#FFFFFF">
-      <rect x="11" y="8"  width="9" height="3"/>
-      <rect x="17" y="11" width="3" height="3"/>
+      <rect x="11" y="8"  width="3" height="9"/>
+      <rect x="17" y="8"  width="3" height="9"/>
       <rect x="11" y="14" width="9" height="3"/>
-      <rect x="11" y="17" width="3" height="3"/>
-      <rect x="11" y="20" width="9" height="3"/>
+      <rect x="17" y="17" width="3" height="6"/>
     </g>
   </svg>
   <div class="wordmark">claude-tray</div>
@@ -95,13 +96,14 @@
   <div class="item exit">Exit</div>
 </div>
 
+<div class="legend-note">The number counts sessions; the color says what they are doing.</div>
 <div class="legend">
   <div class="state">
-    <svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="15" fill="#E5482F"/><g fill="#fff"><rect x="11" y="8" width="9" height="3"/><rect x="17" y="11" width="3" height="3"/><rect x="11" y="14" width="9" height="3"/><rect x="11" y="17" width="3" height="3"/><rect x="11" y="20" width="9" height="3"/></g></svg>
+    <svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="15" fill="#E5482F"/><g fill="#fff"><rect x="11" y="8" width="3" height="9"/><rect x="17" y="8" width="3" height="9"/><rect x="11" y="14" width="9" height="3"/><rect x="17" y="17" width="3" height="6"/></g></svg>
     <div><b>WAITING</b><s>blocked on you</s></div>
   </div>
   <div class="state">
-    <svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="15" fill="#2E8BE0"/><g fill="#fff"><rect x="14" y="8" width="3" height="3"/><rect x="11" y="11" width="6" height="3"/><rect x="14" y="14" width="3" height="3"/><rect x="14" y="17" width="3" height="3"/><rect x="11" y="20" width="9" height="3"/></g></svg>
+    <svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="15" fill="#2E8BE0"/><g fill="#fff"><rect x="11" y="8" width="3" height="9"/><rect x="17" y="8" width="3" height="9"/><rect x="11" y="14" width="9" height="3"/><rect x="17" y="17" width="3" height="6"/></g></svg>
     <div><b>BUSY</b><s>working</s></div>
   </div>
   <div class="state">

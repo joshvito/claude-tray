@@ -74,6 +74,19 @@ struct Raw {
     kind: Option<String>,
     started_at: Option<u64>,
     status_updated_at: Option<u64>,
+    proc_start: Option<String>,
+}
+
+impl Raw {
+    /// `procStart` is the process creation time in FILETIME ticks, written as a JSON string.
+    fn proc_start_ticks(&self) -> Option<u64> {
+        self.proc_start
+            .as_deref()
+            .map(str::trim)
+            .filter(|ticks| !ticks.is_empty())?
+            .parse()
+            .ok()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -186,12 +199,6 @@ impl Registry {
                 continue;
             };
 
-            if !liveness::is_claude_process(pid) {
-                self.cache.remove(&pid);
-                continue;
-            }
-            seen.push(pid);
-
             let parsed = fs::read_to_string(entry.path())
                 .ok()
                 .and_then(|text| serde_json::from_str::<Raw>(&text).ok());
@@ -206,6 +213,13 @@ impl Registry {
                     None => continue,
                 },
             };
+
+            // Read before checked, because `procStart` is what pins the row to one process.
+            if !liveness::is_claude_process(pid, raw.proc_start_ticks()) {
+                self.cache.remove(&pid);
+                continue;
+            }
+            seen.push(pid);
 
             // Daemon processes are infrastructure, not conversations — never worth a row.
             if matches!(raw.kind.as_deref(), Some("daemon") | Some("daemon-worker")) {
@@ -291,12 +305,13 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
-    /// The image-name check is what stops a recycled pid from resurrecting a session.
+    /// Without a `procStart` to match, the image name is what stops a recycled pid from
+    /// resurrecting a session.
     #[test]
     fn liveness_requires_a_claude_process() {
-        assert!(!liveness::is_claude_process(u32::MAX - 1));
+        assert!(!liveness::is_claude_process(u32::MAX - 1, None));
         // This test binary is alive but is not claude.exe.
-        assert!(!liveness::is_claude_process(std::process::id()));
+        assert!(!liveness::is_claude_process(std::process::id(), None));
     }
 
     #[test]
@@ -322,6 +337,61 @@ mod tests {
         assert_eq!(color_key(7, &blank), "pid 7");
     }
 
+    fn at(status: Status) -> Session {
+        Session {
+            pid: 1,
+            key: format!("{status:?}"),
+            name: "s".to_string(),
+            status,
+            waiting_for: None,
+            since: 0,
+        }
+    }
+
+    /// Four sessions badge 4, whatever they are doing. Only the color moves.
+    #[test]
+    fn the_badge_counts_sessions_and_the_color_ranks_urgency() {
+        let mixed = [
+            at(Status::Waiting),
+            at(Status::Busy),
+            at(Status::Idle),
+            at(Status::Idle),
+        ];
+        assert_eq!(
+            icon_state(&mixed),
+            IconState {
+                kind: IconKind::Waiting,
+                count: 4
+            }
+        );
+
+        let working = [at(Status::Busy), at(Status::Idle), at(Status::Idle)];
+        assert_eq!(
+            icon_state(&working),
+            IconState {
+                kind: IconKind::Busy,
+                count: 3
+            }
+        );
+
+        let quiet = [at(Status::Idle), at(Status::Idle)];
+        assert_eq!(
+            icon_state(&quiet),
+            IconState {
+                kind: IconKind::Idle,
+                count: 2
+            }
+        );
+
+        assert_eq!(
+            icon_state(&[]),
+            IconState {
+                kind: IconKind::Empty,
+                count: 0
+            }
+        );
+    }
+
     /// Prints what the tray would show for the sessions running right now.
     /// `cargo test -- --nocapture live_registry`
     #[test]
@@ -338,35 +408,24 @@ mod tests {
     }
 }
 
+/// The badge is always the session count; the disc color is what says whether anything needs you.
+/// Badging the waiting count instead would read as "1 session" to someone running four.
 pub fn icon_state(sessions: &[Session]) -> IconState {
-    let waiting = sessions
+    let kind = if sessions.iter().any(|s| s.status == Status::Waiting) {
+        IconKind::Waiting
+    } else if sessions
         .iter()
-        .filter(|s| s.status == Status::Waiting)
-        .count();
-    let busy = sessions
-        .iter()
-        .filter(|s| matches!(s.status, Status::Busy | Status::Shell))
-        .count();
-
-    if waiting > 0 {
-        IconState {
-            kind: IconKind::Waiting,
-            count: waiting,
-        }
-    } else if busy > 0 {
-        IconState {
-            kind: IconKind::Busy,
-            count: busy,
-        }
+        .any(|s| matches!(s.status, Status::Busy | Status::Shell))
+    {
+        IconKind::Busy
     } else if !sessions.is_empty() {
-        IconState {
-            kind: IconKind::Idle,
-            count: sessions.len(),
-        }
+        IconKind::Idle
     } else {
-        IconState {
-            kind: IconKind::Empty,
-            count: 0,
-        }
+        IconKind::Empty
+    };
+
+    IconState {
+        kind,
+        count: sessions.len(),
     }
 }
